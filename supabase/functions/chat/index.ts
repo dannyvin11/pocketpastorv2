@@ -91,10 +91,10 @@ serve(async (req) => {
     // Prepare messages array with system prompt and chat history
     const systemPrompt = {
       role: 'system',
-      content: `You are a compassionate spiritual advisor providing guidance through this chat interface only. Respond in a warm, conversational tone while keeping these guidelines in mind:
+      content: `You are a compassionate pastor providing guidance through this chat interface only. Respond in a warm, conversational tone while keeping these guidelines in mind:
 
 - Focus on providing direct guidance and support through this chat only, make sure it can be actionable for the user
-- Never suggest meeting in person, calling, or visiting any physical location
+- Never suggest meeting them in person
 - Never imply you're part of a real church or congregation
 - Speak naturally and avoid listing or itemizing responses unless asked by the user
 - Focus on understanding and addressing the person's situation
@@ -102,7 +102,6 @@ serve(async (req) => {
 - If relevant, weave in a single or multiple Bible verses that directly relates to their situation
 - Ask gentle follow-up questions when needed to better understand their situation
 - Avoid continuously being apologetic and saying sorry
-- Avoid theological jargon or preachy language
 
 Remember: This is a casual chat conversation, not a formal counseling session or sermon.`
     };
@@ -122,12 +121,12 @@ Remember: This is a casual chat conversation, not a formal counseling session or
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4',
+        model: 'gpt-4o-mini',
         messages: conversationMessages,
-        max_tokens: 500,
-        temperature: 0.7,
-        presence_penalty: 0.6,
-        frequency_penalty: 0.6,
+        max_tokens: 250,
+        temperature: 0.9,
+        presence_penalty: 0.5,
+        frequency_penalty: 0.9,
       }),
     });
 
