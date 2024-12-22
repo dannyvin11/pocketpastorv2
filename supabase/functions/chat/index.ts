@@ -7,6 +7,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 interface ChatMessage {
   text: string;
+  messages?: { role: string; content: string; }[];
 }
 
 interface OpenAIResponse {
@@ -77,14 +78,40 @@ serve(async (req) => {
     const body = await req.json();
     console.log('📥 Received request body:', body);
 
-    const { text } = body as ChatMessage;
+    const { text, messages = [] } = body as ChatMessage;
     console.log('📝 Extracted text:', text);
+    console.log('💬 Chat history:', messages);
 
     // Get OpenAI API key from environment variable
     const openAiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAiKey) {
       throw new Error('OpenAI API key not configured');
     }
+
+    // Prepare messages array with system prompt and chat history
+    const systemPrompt = {
+      role: 'system',
+      content: `You are a compassionate spiritual advisor providing guidance through this chat interface only. Respond in a warm, conversational tone while keeping these guidelines in mind:
+
+- Focus on providing direct guidance and support through this chat only, make sure it can be actionable for the user
+- Never suggest meeting in person, calling, or visiting any physical location
+- Never imply you're part of a real church or congregation
+- Speak naturally and avoid listing or itemizing responses unless asked by the user
+- Focus on understanding and addressing the person's situation
+- Offer practical, actionable guidance they can implement on their own
+- If relevant, weave in a single or multiple Bible verses that directly relates to their situation
+- Ask gentle follow-up questions when needed to better understand their situation
+- Avoid continuously being apologetic and saying sorry
+- Avoid theological jargon or preachy language
+
+Remember: This is a casual chat conversation, not a formal counseling session or sermon.`
+    };
+
+    const conversationMessages = [
+      systemPrompt,
+      ...messages,
+      { role: 'user', content: text }
+    ];
 
     // Call OpenAI API
     console.log('🤖 Calling OpenAI API...');
@@ -95,23 +122,12 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `You are a pastor providing biblical guidance. For each question:
-1. Give a concise, practical answer in modern language
-2. Ask clarifying questions if needed
-3. End with relevant Bible quotes, including chapter and verse
-Use only official open-source Bible translations.`
-          },
-          {
-            role: 'user',
-            content: text
-          }
-        ],
-        max_tokens: 150,
-        temperature: 0.9,
+        model: 'gpt-4',
+        messages: conversationMessages,
+        max_tokens: 500,
+        temperature: 0.7,
+        presence_penalty: 0.6,
+        frequency_penalty: 0.6,
       }),
     });
 

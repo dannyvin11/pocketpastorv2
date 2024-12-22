@@ -11,17 +11,23 @@ interface Message {
   timestamp: Date;
 }
 
+interface ChatHistory {
+  role: string;
+  content: string;
+}
+
 const MAX_CHARS = 120;
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: 'Hello! How can I help you today?',
+      text: 'Hello! How can I help you with biblical guidance today?',
       isUser: false,
       timestamp: new Date(),
     },
   ]);
+  const [chatHistory, setChatHistory] = useState<ChatHistory[]>([]);
   const [inputText, setInputText] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -51,9 +57,19 @@ export default function ChatScreen() {
         if (sessionError) throw sessionError;
         if (!session) throw new Error('No active session');
 
-        // Call the edge function with auth token
+        // Update chat history with user's message
+        const updatedHistory = [
+          ...chatHistory,
+          { role: 'user', content: newMessage.text }
+        ];
+        setChatHistory(updatedHistory);
+
+        // Call the edge function with auth token and chat history
         const { data, error } = await supabase.functions.invoke('chat', {
-          body: { text: newMessage.text },
+          body: { 
+            text: newMessage.text,
+            messages: updatedHistory
+          },
           headers: {
             Authorization: `Bearer ${session.access_token}`,
           },
@@ -61,7 +77,10 @@ export default function ChatScreen() {
 
         if (error) throw error;
 
-        // Add the bot response
+        // Add the bot response to chat history
+        setChatHistory(prev => [...prev, { role: 'assistant', content: data.message }]);
+
+        // Add the bot response to messages
         const botResponse: Message = {
           id: (Date.now() + 1).toString(),
           text: data.message,
