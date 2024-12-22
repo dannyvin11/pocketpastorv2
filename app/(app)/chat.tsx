@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Platform, KeyboardAvoidingView, TextInput, NativeSyntheticEvent, TextInputKeyPressEventData } from 'react-native';
 import { Text, Button } from '@rneui/themed';
 import { useRouter } from 'expo-router';
+import { supabase } from '../../lib/supabase';
 
 interface Message {
   id: string;
@@ -32,7 +33,7 @@ export default function ChatScreen() {
     scrollViewRef.current?.scrollToEnd({ animated: true });
   }, [messages]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (inputText.trim()) {
       const newMessage: Message = {
         id: Date.now().toString(),
@@ -44,16 +45,41 @@ export default function ChatScreen() {
       setMessages(prev => [...prev, newMessage]);
       setInputText('');
 
-      // Simulate bot response
-      setTimeout(() => {
+      try {
+        // Get the current session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        if (!session) throw new Error('No active session');
+
+        // Call the edge function with auth token
+        const { data, error } = await supabase.functions.invoke('chat', {
+          body: { text: newMessage.text },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+
+        if (error) throw error;
+
+        // Add the bot response
         const botResponse: Message = {
           id: (Date.now() + 1).toString(),
-          text: 'Thanks for your message! This is a demo response.',
+          text: data.message,
           isUser: false,
           timestamp: new Date(),
         };
         setMessages(prev => [...prev, botResponse]);
-      }, 1000);
+      } catch (error: any) {
+        console.error('Error calling edge function:', error);
+        // Add an error message
+        const errorResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          text: error?.message || 'Sorry, there was an error processing your message.',
+          isUser: false,
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, errorResponse]);
+      }
     }
   };
 
