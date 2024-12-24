@@ -3,7 +3,7 @@
   "outputDirectory": "dist",
   "devCommand": "npx expo start --web",
   "cleanUrls": true,
-  "framework": "expo",
+  "framework": "vite",
   "rewrites": [
     {
       "source": "/(.*)",
