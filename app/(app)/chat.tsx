@@ -284,7 +284,7 @@ export default function Chat() {
       <SafeAreaView style={{ flex: 1 }}>
         <View style={[styles.header, { backgroundColor: colors.cardBackground }]}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>
-            Pastoral Chat
+            Pastor Chat
           </Text>
           {themeToggleButton}
         </View>
