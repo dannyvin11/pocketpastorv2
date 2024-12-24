@@ -279,7 +279,7 @@ export default function Auth() {
           setError(error.message)
         }
       } else {
-        setError('Please check your inbox for email verification!')
+        setError('Email verification is currently disabled, please sign in with the email and password you provided.')
       }
     } catch (error) {
       if (error instanceof Error) setError(error.message)
