@@ -3,6 +3,7 @@ import { View, StyleSheet, Platform, TextInput, Pressable } from 'react-native'
 import { supabase } from '../lib/supabase'
 import { Button, Text, Icon } from '@rneui/themed'
 import { useRouter } from 'expo-router'
+import { Input } from '@rneui/base'
 
 interface AuthFormProps {
   email: string
@@ -93,33 +94,6 @@ function AuthForm({
   const hasEmailError = error?.toLowerCase().includes('email') || error?.toLowerCase().includes('account')
   const hasPasswordError = error?.toLowerCase().includes('password')
 
-  const renderIcon = (type: 'email' | 'password', hasError: boolean) => {
-    if (Platform.OS === 'web') {
-      return (
-        <i 
-          className={`fa fa-${type === 'email' ? 'envelope' : 'lock'}`} 
-          style={{
-            color: hasError ? '#dc2626' : '#5469d4',
-            marginLeft: 0,
-            marginRight: 0,
-            fontSize: 16,
-            width: 16,
-            textAlign: 'center',
-          }}
-        />
-      )
-    }
-    return (
-      <Icon
-        name={type === 'email' ? 'mail' : 'lock'}
-        type="feather"
-        size={16}
-        color={hasError ? '#dc2626' : '#5469d4'}
-        style={{ marginLeft: 0, marginRight: 0 }}
-      />
-    )
-  }
-
   return (
     <View style={styles.card}>
       <Text style={styles.title}>
@@ -138,7 +112,6 @@ function AuthForm({
             styles.inputContainer,
             hasEmailError && styles.inputError
           ]}>
-            {renderIcon('email', Boolean(hasEmailError))}
             {Platform.OS === 'web' ? (
               <WebInput
                 type="email"
@@ -168,7 +141,6 @@ function AuthForm({
             styles.inputContainer,
             hasPasswordError && styles.inputError
           ]}>
-            {renderIcon('password', Boolean(hasPasswordError))}
             {Platform.OS === 'web' ? (
               <WebInput
                 type="password"
@@ -403,7 +375,7 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
     borderRadius: 8,
     height: 48,
-    paddingLeft: 0,
+    paddingLeft: 5,
     paddingRight: 0,
     backgroundColor: '#FFFFFF',
   },

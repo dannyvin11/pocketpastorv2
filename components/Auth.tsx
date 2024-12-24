@@ -98,7 +98,7 @@ export default function Auth() {
         }
       } else {
         console.log('Sign up successful, showing verification message')
-        Alert.alert('Success!', 'Please check your email for verification link')
+        Alert.alert('Success!', 'Email Verification is currently disabled, please sign in with the email and password you provided')
       }
     } catch (error) {
       console.error('Sign up exception:', error)
@@ -141,8 +141,11 @@ export default function Auth() {
             inputStyle={styles.input}
             inputContainerStyle={styles.inputContainer}
             returnKeyType="next"
-            leftIconContainerStyle={{ marginLeft: 0, paddingLeft: 0 }}
             containerStyle={{ paddingHorizontal: 0 }}
+            textContentType="emailAddress"
+            inputAccessoryViewID={Platform.OS === 'ios' ? 'none' : undefined}
+            inputMode="email"
+            leftIcon={undefined}
           />
         </View>
 
@@ -168,8 +171,10 @@ export default function Auth() {
               console.log('Submit editing triggered')
               handleSubmit()
             }}
-            leftIconContainerStyle={{ marginLeft: 0, paddingLeft: 0 }}
             containerStyle={{ paddingHorizontal: 0 }}
+            textContentType="password"
+            inputAccessoryViewID={Platform.OS === 'ios' ? 'none' : undefined}
+            leftIcon={undefined}
           />
         </View>
       </>
