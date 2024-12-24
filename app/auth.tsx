@@ -1,14 +1,28 @@
-import React, { useState, useCallback } from 'react'
-import { Alert, View, Platform, StyleSheet } from 'react-native'
+import React, { useState } from 'react'
+import { View, StyleSheet, Platform } from 'react-native'
 import { supabase } from '../lib/supabase'
 import { Button, Text } from '@rneui/themed'
 import { useRouter } from 'expo-router'
 
-const WebInput = ({ type, value, onChange, placeholder }: { 
-  type: string, 
-  value: string, 
-  onChange: (text: string) => void, 
-  placeholder: string 
+interface AuthFormProps {
+  email: string
+  password: string
+  loading: boolean
+  isSignUp: boolean
+  error: string | null
+  onEmailChange: (text: string) => void
+  onPasswordChange: (text: string) => void
+  onSignIn: () => void
+  onSignUp: () => void
+  onToggleMode: () => void
+}
+
+const WebInput = ({ type, value, onChange, placeholder, onEnterPress }: { 
+  type: string
+  value: string
+  onChange: (text: string) => void
+  placeholder: string
+  onEnterPress: () => void
 }) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value
@@ -20,54 +34,65 @@ const WebInput = ({ type, value, onChange, placeholder }: {
     }
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      onEnterPress()
+    }
+  }
+
   return (
     <input
       type={type}
       value={value}
       onChange={handleChange}
+      onKeyDown={handleKeyDown}
       placeholder={placeholder}
       pattern={type === 'email' ? "[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}$" : undefined}
       autoComplete={type === 'email' ? 'email' : type === 'password' ? 'current-password' : undefined}
       spellCheck={type === 'email' ? false : undefined}
       style={{
         flex: 1,
-        height: 44,
+        height: '100%',
         paddingLeft: 12,
         paddingRight: 12,
-        fontSize: 16,
-        color: '#1a202c',
+        fontSize: 17,
+        color: '#4A3728',
         border: 'none',
         outline: 'none',
         backgroundColor: 'transparent',
-        width: '100%'
+        width: '100%',
+        fontFamily: 'Georgia, serif',
       }}
     />
   )
-}
-
-interface AuthFormProps {
-  email: string;
-  password: string;
-  loading: boolean;
-  isSignUp: boolean;
-  onEmailChange: (text: string) => void;
-  onPasswordChange: (text: string) => void;
-  onSignIn: () => void;
-  onSignUp: () => void;
-  onToggleMode: () => void;
 }
 
 function AuthForm({ 
   email, 
   password, 
   loading, 
-  isSignUp, 
+  isSignUp,
+  error,
   onEmailChange, 
   onPasswordChange, 
   onSignIn, 
   onSignUp,
   onToggleMode 
 }: AuthFormProps) {
+  const handleSubmit = () => {
+    if (loading) return
+    if (isSignUp) {
+      onSignUp()
+    } else {
+      onSignIn()
+    }
+  }
+
+  // Determine which field has an error
+  const hasEmailError = error?.toLowerCase().includes('email') || error?.toLowerCase().includes('account')
+  const hasPasswordError = error?.toLowerCase().includes('password')
+
   return (
     <View style={styles.card}>
       <Text style={styles.title}>
@@ -82,34 +107,59 @@ function AuthForm({
       <View style={styles.formContainer}>
         <View style={styles.inputWrapper}>
           <Text style={styles.label}>Email</Text>
-          <View style={styles.inputContainer}>
-            <i className="fa fa-envelope" style={styles.icon} />
+          <View style={[
+            styles.inputContainer,
+            hasEmailError && styles.inputError
+          ]}>
+            <i 
+              className="fa fa-envelope" 
+              style={{
+                color: hasEmailError ? '#dc2626' : '#5469d4',
+                marginRight: 12,
+                fontSize: 16,
+              }}
+            />
             <WebInput
               type="email"
               value={email}
               onChange={onEmailChange}
               placeholder="email@address.com"
+              onEnterPress={handleSubmit}
             />
           </View>
         </View>
         <View style={styles.inputWrapper}>
           <Text style={styles.label}>Password</Text>
-          <View style={styles.inputContainer}>
-            <i className="fa fa-lock" style={styles.icon} />
+          <View style={[
+            styles.inputContainer,
+            hasPasswordError && styles.inputError
+          ]}>
+            <i 
+              className="fa fa-lock" 
+              style={{
+                color: hasPasswordError ? '#dc2626' : '#5469d4',
+                marginRight: 12,
+                fontSize: 16,
+              }}
+            />
             <WebInput
               type="password"
               value={password}
               onChange={onPasswordChange}
               placeholder="Password"
+              onEnterPress={handleSubmit}
             />
           </View>
+          {error && (
+            <Text style={styles.errorText}>{error}</Text>
+          )}
         </View>
 
         <View style={styles.buttonContainer}>
           <Button
             title={isSignUp ? "Sign up" : "Sign in"}
             disabled={loading}
-            onPress={isSignUp ? onSignUp : onSignIn}
+            onPress={handleSubmit}
             buttonStyle={styles.primaryButton}
             loading={loading}
           />
@@ -137,75 +187,82 @@ export default function Auth() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [isSignUp, setIsSignUp] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleEmailChange = useCallback((text: string) => {
-    setEmail(text)
-  }, [])
-
-  const handlePasswordChange = useCallback((text: string) => {
-    setPassword(text)
-  }, [])
-
-  const showAlert = useCallback((message: string) => {
-    if (Platform.OS === 'web') {
-      window.alert(message)
-    } else {
-      Alert.alert(message)
-    }
-  }, [])
-
-  const handleSignIn = useCallback(async () => {
+  const handleSignIn = async () => {
     try {
+      setError(null)
+      
+      // Validate email format
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+      if (!emailRegex.test(email)) {
+        setError('Please enter a valid email address')
+        return
+      }
+
+      // Validate password
+      if (!password) {
+        setError('Please enter your password')
+        return
+      }
+
       setLoading(true)
+
+      // Attempt to sign in
       const { error } = await supabase.auth.signInWithPassword({
-        email: email,
-        password: password,
+        email,
+        password,
       })
 
       if (error) {
-        showAlert(error.message)
+        setError('Incorrect email or password')
       } else {
         router.replace('/(app)')
       }
     } catch (error) {
-      if (error instanceof Error) {
-        showAlert(error.message)
-      }
+      if (error instanceof Error) setError(error.message)
     } finally {
       setLoading(false)
     }
-  }, [email, password, showAlert, router])
+  }
 
-  const handleSignUp = useCallback(async () => {
+  const handleSignUp = async () => {
     try {
-      setLoading(true)
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.signUp({
-        email: email,
-        password: password,
-      })
+      setError(null)
 
+      // Validate email format
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+      if (!emailRegex.test(email)) {
+        setError('Invalid email address format')
+        return
+      }
+
+      // Validate password strength
+      if (password.length < 6) {
+        setError('Password must be at least 6 characters long')
+        return
+      }
+
+      setLoading(true)
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+      })
       if (error) {
-        showAlert(error.message)
-      } else if (!session) {
-        showAlert('Please check your inbox for email verification!')
+        if (error.message.includes('already registered')) {
+          setError('This email is already registered')
+        } else {
+          setError(error.message)
+        }
       } else {
-        router.replace('/(app)')
+        setError('Please check your inbox for email verification!')
       }
     } catch (error) {
-      if (error instanceof Error) {
-        showAlert(error.message)
-      }
+      if (error instanceof Error) setError(error.message)
     } finally {
       setLoading(false)
     }
-  }, [email, password, showAlert, router])
-
-  const toggleMode = useCallback(() => {
-    setIsSignUp(!isSignUp)
-  }, [isSignUp])
+  }
 
   return (
     <View style={styles.container}>
@@ -214,11 +271,15 @@ export default function Auth() {
         password={password}
         loading={loading}
         isSignUp={isSignUp}
-        onEmailChange={handleEmailChange}
-        onPasswordChange={handlePasswordChange}
+        error={error}
+        onEmailChange={setEmail}
+        onPasswordChange={setPassword}
         onSignIn={handleSignIn}
         onSignUp={handleSignUp}
-        onToggleMode={toggleMode}
+        onToggleMode={() => {
+          setError(null)
+          setIsSignUp(!isSignUp)
+        }}
       />
     </View>
   )
@@ -227,7 +288,7 @@ export default function Auth() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f7fafc',
+    backgroundColor: '#FBF7F4',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
@@ -236,85 +297,106 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 480,
     backgroundColor: 'white',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 40,
     ...Platform.select({
       web: {
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+        boxShadow: '0 8px 20px rgba(156, 123, 92, 0.15)',
       },
       default: {
-        shadowColor: '#000',
+        shadowColor: '#9C7B5C',
         shadowOffset: {
           width: 0,
-          height: 2,
+          height: 4,
         },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 4,
       },
     }),
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1a202c',
-    marginBottom: 8,
+    fontSize: 36,
+    fontFamily: Platform.select({ web: 'Palatino, serif', default: 'serif' }),
+    fontWeight: '600',
+    color: '#4A3728',
+    marginBottom: 12,
     textAlign: 'center',
   },
   subtitle: {
     textAlign: 'center',
-    color: '#718096',
-    marginBottom: 32,
-    fontSize: 16,
+    color: '#6B584A',
+    marginBottom: 36,
+    fontSize: 17,
+    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
+    lineHeight: 24,
   },
   formContainer: {
-    gap: 24,
+    gap: 28,
   },
   inputWrapper: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   label: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#4a5568',
+    fontWeight: '600',
+    color: '#4A3728',
     marginBottom: 8,
+    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderWidth: 1.5,
+    borderColor: '#D4C5B9',
+    borderRadius: 12,
+    paddingHorizontal: 16,
     backgroundColor: 'white',
+    height: 52,
   },
-  icon: {
-    color: '#5469d4',
-    marginRight: 12,
-    fontSize: 16,
+  inputError: {
+    borderColor: '#B45309',
+    backgroundColor: '#FEF3C7',
   },
   buttonContainer: {
-    gap: 12,
-    marginTop: 8,
+    gap: 16,
+    marginTop: 12,
   },
   primaryButton: {
-    backgroundColor: '#5469d4',
-    borderRadius: 8,
-    height: 48,
+    backgroundColor: '#8B5E34',
+    borderRadius: 12,
+    height: 52,
+    shadowColor: '#8B5E34',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   switchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 12,
+    marginTop: 16,
   },
   switchText: {
-    color: '#718096',
+    color: '#6B584A',
     fontSize: 16,
     marginRight: 8,
+    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
   },
   switchButton: {
-    color: '#5469d4',
+    color: '#8B5E34',
     fontWeight: '600',
+    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
+  },
+  errorText: {
+    color: '#B45309',
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
   },
 }) 

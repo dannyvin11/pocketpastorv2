@@ -1,372 +1,262 @@
-import React, { useState, useEffect, useCallback, memo } from 'react'
-import { Alert, StyleSheet, View, Platform, Dimensions } from 'react-native'
+import { useState } from 'react'
+import { Alert, StyleSheet, View, Platform, GestureResponderEvent } from 'react-native'
 import { supabase } from '../lib/supabase'
-import { Button, Text } from '@rneui/themed'
-
-const WebInput = memo(({ type, value, onChange, placeholder }: { 
-  type: string, 
-  value: string, 
-  onChange: (text: string) => void, 
-  placeholder: string 
-}) => {
-  console.log(`WebInput rendering - type: ${type}, value: ${value}`)
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value
-    console.log('WebInput onChange event:', newValue)
-    
-    // Only allow valid email characters for email type
-    if (type === 'email') {
-      // Remove any characters that aren't valid in an email address
-      const emailValue = newValue.replace(/[^a-zA-Z0-9@._-]/g, '')
-      onChange(emailValue)
-    } else {
-      onChange(newValue)
-    }
-  }
-
-  return (
-    <input
-      type={type}
-      value={value}
-      onChange={handleChange}
-      placeholder={placeholder}
-      pattern={type === 'email' ? "[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}$" : undefined}
-      autoComplete={type === 'email' ? 'email' : type === 'password' ? 'current-password' : undefined}
-      spellCheck={type === 'email' ? false : undefined}
-      style={{
-        flex: 1,
-        height: 44,
-        paddingLeft: 12,
-        paddingRight: 12,
-        fontSize: 16,
-        color: '#1a202c',
-        border: 'none',
-        outline: 'none',
-        backgroundColor: 'transparent',
-        width: '100%'
-      }}
-    />
-  )
-})
-
-WebInput.displayName = 'WebInput'
-
-interface AuthFormProps {
-  email: string;
-  password: string;
-  loading: boolean;
-  isSignUp: boolean;
-  onEmailChange: (text: string) => void;
-  onPasswordChange: (text: string) => void;
-  onSignIn: () => void;
-  onSignUp: () => void;
-  onToggleMode: () => void;
-}
-
-const AuthForm = memo(({ 
-  email, 
-  password, 
-  loading, 
-  isSignUp, 
-  onEmailChange, 
-  onPasswordChange, 
-  onSignIn, 
-  onSignUp,
-  onToggleMode 
-}: AuthFormProps) => {
-  console.log('AuthForm rendering, Timestamp:', Date.now())
-  return (
-    <View style={styles.formWrapper}>
-      <Text style={styles.mainTitle}>{isSignUp ? 'Create Account' : 'Welcome Back'}</Text>
-      <Text style={styles.subtitle}>
-        {isSignUp
-          ? 'Sign up to start managing your account'
-          : 'Sign in to access your account'}
-      </Text>
-      
-      <View style={[styles.verticallySpaced, styles.mt20]}>
-        <Text style={styles.label}>Email</Text>
-        <View style={styles.inputContainer}>
-          <i className="fa fa-envelope" style={styles.icon} />
-          <WebInput
-            type="email"
-            value={email}
-            onChange={onEmailChange}
-            placeholder="email@address.com"
-          />
-        </View>
-      </View>
-      <View style={styles.verticallySpaced}>
-        <Text style={styles.label}>Password</Text>
-        <View style={styles.inputContainer}>
-          <i className="fa fa-lock" style={styles.icon} />
-          <WebInput
-            type="password"
-            value={password}
-            onChange={onPasswordChange}
-            placeholder="Password"
-          />
-        </View>
-      </View>
-      <View style={[styles.verticallySpaced, styles.mt20]}>
-        <Button
-          title={isSignUp ? "Sign up" : "Sign in"}
-          disabled={loading}
-          onPress={isSignUp ? onSignUp : onSignIn}
-          buttonStyle={styles.primaryButton}
-          loading={loading}
-        />
-      </View>
-      <View style={styles.switchContainer}>
-        <Text style={styles.switchText}>
-          {isSignUp ? 'Already have an account?' : "Don't have an account?"}
-        </Text>
-        <Button
-          title={isSignUp ? "Sign in" : "Sign up"}
-          type="clear"
-          onPress={onToggleMode}
-          titleStyle={styles.switchButton}
-        />
-      </View>
-    </View>
-  )
-})
-
-AuthForm.displayName = 'AuthForm'
+import { Button, Input, Text } from '@rneui/themed'
+import { useRouter } from 'expo-router'
 
 export default function Auth() {
-  console.log('Auth component rendering - START')
-
+  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [isSignUp, setIsSignUp] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
 
-  useEffect(() => {
-    console.log('Initial useEffect running')
-    if (Platform.OS === 'web') {
-      const rootDiv = document.querySelector('.css-view-175oi2r') as HTMLElement
-      if (rootDiv) {
-        rootDiv.style.width = '100%'
-        console.log('Root div width set to 100%')
-      } else {
-        console.log('Root div not found')
-      }
-    }
-  }, [])
-
-  const handleEmailChange = useCallback((text: string) => {
-    console.log('handleEmailChange called with:', text, 'Timestamp:', Date.now())
-    setEmail(text)
-  }, [])
-
-  const handlePasswordChange = useCallback((text: string) => {
-    console.log('handlePasswordChange called with:', text, 'Timestamp:', Date.now())
-    setPassword(text)
-  }, [])
-
-  const showAlert = useCallback((message: string) => {
-    console.log('Showing alert:', message)
-    if (Platform.OS === 'web') {
-      window.alert(message)
-    } else {
-      Alert.alert(message)
-    }
-  }, [])
-
-  const handleSignIn = useCallback(async () => {
-    console.log('Attempting sign in with email:', email)
+  async function signInWithEmail() {
+    setLoading(true)
+    setErrorMessage('')
     try {
-      setLoading(true)
       const { error } = await supabase.auth.signInWithPassword({
-        email: email,
-        password: password,
+        email,
+        password,
       })
 
       if (error) {
-        console.error('Sign in error:', error)
-        showAlert(error.message)
+        if (error.message.includes('Invalid login credentials')) {
+          setErrorMessage('Incorrect email or password')
+        } else if (error.message.includes('Email not confirmed')) {
+          setErrorMessage('Please verify your email address')
+        } else {
+          setErrorMessage(error.message)
+        }
       } else {
-        console.log('Sign in successful')
+        router.replace('/(app)/chat')
       }
     } catch (error) {
-      console.error('Sign in exception:', error)
       if (error instanceof Error) {
-        showAlert(error.message)
+        Alert.alert(error.message)
       }
     } finally {
       setLoading(false)
     }
-  }, [email, password, showAlert])
-
-  const handleSignUp = useCallback(async () => {
-    console.log('Attempting sign up with email:', email)
-    try {
-      setLoading(true)
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.signUp({
-        email: email,
-        password: password,
-      })
-
-      if (error) {
-        console.error('Sign up error:', error)
-        showAlert(error.message)
-      } else if (!session) {
-        console.log('Sign up successful, verification email sent')
-        showAlert('Please check your inbox for email verification!')
-      } else {
-        console.log('Sign up and session creation successful')
-      }
-    } catch (error) {
-      console.error('Sign up exception:', error)
-      if (error instanceof Error) {
-        showAlert(error.message)
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [email, password, showAlert])
-
-  const toggleMode = useCallback(() => {
-    console.log('Switching mode to:', !isSignUp, 'Timestamp:', Date.now())
-    setIsSignUp(!isSignUp)
-  }, [isSignUp])
-
-  const isWeb = Platform.OS === 'web'
-  const windowHeight = Dimensions.get('window').height
-
-  console.log('Auth component rendering - before return, Timestamp:', Date.now())
-
-  if (!isWeb) {
-    console.log('Rendering mobile view')
-    return (
-      <View style={styles.container}>
-        <AuthForm
-          email={email}
-          password={password}
-          loading={loading}
-          isSignUp={isSignUp}
-          onEmailChange={handleEmailChange}
-          onPasswordChange={handlePasswordChange}
-          onSignIn={handleSignIn}
-          onSignUp={handleSignUp}
-          onToggleMode={toggleMode}
-        />
-      </View>
-    )
   }
 
-  console.log('Rendering web view')
+  async function signUpWithEmail() {
+    setLoading(true)
+    setErrorMessage('')
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+      })
+
+      if (error) {
+        if (error.message.includes('already registered')) {
+          setErrorMessage('This email is already registered')
+        } else if (error.message.includes('weak password')) {
+          setErrorMessage('Password must be at least 6 characters long')
+        } else {
+          setErrorMessage(error.message)
+        }
+      } else {
+        Alert.alert('Success!', 'Please check your email for verification link')
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        Alert.alert(error.message)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSubmit = (event: GestureResponderEvent | React.FormEvent) => {
+    if ('preventDefault' in event) {
+      event.preventDefault()
+    }
+    if (isSignUp) {
+      signUpWithEmail()
+    } else {
+      signInWithEmail()
+    }
+  }
+
   return (
-    <View style={[styles.pageContainer, { height: windowHeight }]}>
-      <View style={styles.outerContainer}>
-        <AuthForm
-          email={email}
-          password={password}
-          loading={loading}
-          isSignUp={isSignUp}
-          onEmailChange={handleEmailChange}
-          onPasswordChange={handlePasswordChange}
-          onSignIn={handleSignIn}
-          onSignUp={handleSignUp}
-          onToggleMode={toggleMode}
-        />
+    <View style={styles.container}>
+      <View style={styles.card}>
+        <Text style={styles.title}>Welcome</Text>
+        <Text style={styles.subtitle}>
+          {isSignUp ? 'Create an account to get started' : 'Sign in to continue your journey'}
+        </Text>
+
+        <form onSubmit={handleSubmit} style={styles.form as any}>
+          <View style={styles.inputWrapper}>
+            <Text style={styles.label}>Email</Text>
+            <Input
+              placeholder="email@address.com"
+              value={email}
+              autoCapitalize="none"
+              autoComplete="email"
+              autoCorrect={false}
+              keyboardType="email-address"
+              onChangeText={(text) => {
+                setEmail(text)
+                setErrorMessage('')
+              }}
+              inputStyle={styles.input}
+              inputContainerStyle={styles.inputContainer}
+            />
+          </View>
+
+          <View style={styles.inputWrapper}>
+            <Text style={styles.label}>Password</Text>
+            <Input
+              placeholder="Password"
+              value={password}
+              autoCapitalize="none"
+              autoComplete="password"
+              autoCorrect={false}
+              secureTextEntry={true}
+              onChangeText={(text) => {
+                setPassword(text)
+                setErrorMessage('')
+              }}
+              inputStyle={styles.input}
+              inputContainerStyle={styles.inputContainer}
+            />
+          </View>
+
+          {errorMessage ? (
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          ) : null}
+
+          <View style={styles.buttonContainer}>
+            <Button
+              title={loading ? 'Loading...' : (isSignUp ? 'Sign Up' : 'Sign In')}
+              disabled={loading}
+              onPress={handleSubmit}
+              buttonStyle={styles.primaryButton}
+            />
+
+            <Button
+              title={`Switch to ${isSignUp ? 'Sign In' : 'Sign Up'}`}
+              onPress={() => {
+                setIsSignUp(!isSignUp)
+                setErrorMessage('')
+              }}
+              type="outline"
+              buttonStyle={styles.outlineButton}
+              titleStyle={styles.outlineButtonText}
+            />
+          </View>
+
+          <input type="submit" style={{ display: 'none' }} />
+        </form>
       </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  pageContainer: {
-    width: '100%',
-    backgroundColor: '#f7fafc',
-  },
-  outerContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
   container: {
     flex: 1,
-    backgroundColor: '#f7fafc',
+    backgroundColor: '#FBF7F4',
     padding: 20,
   },
-  formWrapper: {
-    width: '100%',
-    maxWidth: 400,
-    padding: 40,
+  card: {
     backgroundColor: 'white',
-    borderRadius: 12,
+    borderRadius: 16,
+    padding: 40,
+    maxWidth: 480,
+    width: '100%',
+    alignSelf: 'center',
     ...Platform.select({
       web: {
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+        boxShadow: '0 8px 20px rgba(156, 123, 92, 0.15)',
+      },
+      default: {
+        shadowColor: '#9C7B5C',
+        shadowOffset: {
+          width: 0,
+          height: 4,
+        },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 4,
       },
     }),
   },
-  mainTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1a202c',
-    marginBottom: 8,
+  title: {
+    fontSize: 36,
+    fontFamily: Platform.select({ web: 'Palatino, serif', default: 'serif' }),
+    fontWeight: '600',
+    color: '#4A3728',
+    marginBottom: 12,
     textAlign: 'center',
   },
   subtitle: {
     textAlign: 'center',
-    color: '#718096',
-    marginBottom: 32,
-    fontSize: 16,
+    color: '#6B584A',
+    marginBottom: 36,
+    fontSize: 17,
+    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
+    lineHeight: 24,
+  },
+  form: {
+    width: '100%',
+  },
+  inputWrapper: {
+    marginBottom: 20,
   },
   label: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#4a5568',
+    fontWeight: '600',
+    color: '#4A3728',
     marginBottom: 8,
+    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
   },
-  verticallySpaced: {
-    paddingTop: 4,
-    paddingBottom: 4,
-    alignSelf: 'stretch',
-  },
-  mt20: {
-    marginTop: 20,
+  input: {
+    color: '#4A3728',
+    fontSize: 17,
+    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
+    paddingHorizontal: 16,
   },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderWidth: 1.5,
+    borderColor: '#D4C5B9',
+    borderRadius: 12,
+    paddingHorizontal: 0,
+    height: 52,
     backgroundColor: 'white',
   },
-  icon: {
-    color: '#5469d4',
-    marginRight: 12,
-    fontSize: 16,
+  errorText: {
+    color: '#B91C1C',
+    fontSize: 14,
+    marginTop: -12,
+    marginBottom: 16,
+    textAlign: 'center',
+    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
+  },
+  buttonContainer: {
+    gap: 16,
+    marginTop: 12,
   },
   primaryButton: {
-    backgroundColor: '#5469d4',
-    borderRadius: 8,
-    height: 48,
+    backgroundColor: '#8B5E34',
+    borderRadius: 12,
+    height: 52,
+    marginBottom: 12,
   },
-  switchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 24,
+  outlineButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: '#8B5E34',
+    borderRadius: 12,
+    height: 52,
   },
-  switchText: {
-    color: '#718096',
-    fontSize: 16,
-  },
-  switchButton: {
-    color: '#5469d4',
+  outlineButtonText: {
+    color: '#8B5E34',
+    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
     fontWeight: '600',
-    fontSize: 16,
   },
 })

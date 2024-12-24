@@ -1,417 +1,352 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Platform, KeyboardAvoidingView, TextInput, NativeSyntheticEvent, TextInputKeyPressEventData } from 'react-native';
-import { Text, Button } from '@rneui/themed';
-import { useRouter } from 'expo-router';
-import { supabase } from '../../lib/supabase';
+import React, { useState, useEffect } from 'react'
+import { View, StyleSheet, Platform, ScrollView } from 'react-native'
+import { Text, Button, Icon } from '@rneui/themed'
+import { supabase } from '../../lib/supabase'
 
 interface Message {
-  id: string;
-  text: string;
-  isUser: boolean;
-  timestamp: Date;
+  role: 'user' | 'assistant'
+  content: string
 }
 
-interface ChatHistory {
-  role: string;
-  content: string;
-}
-
-const MAX_CHARS = 120;
-
-export default function ChatScreen() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: 'Hello! How can I help you with biblical guidance today?',
-      isUser: false,
-      timestamp: new Date(),
-    },
-  ]);
-  const [chatHistory, setChatHistory] = useState<ChatHistory[]>([]);
-  const [inputText, setInputText] = useState('');
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const scrollViewRef = useRef<ScrollView>(null);
-  const inputRef = useRef<TextInput>(null);
-  const router = useRouter();
+export default function Chat() {
+  const [messages, setMessages] = useState<Message[]>([])
+  const [newMessage, setNewMessage] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [remainingChars, setRemainingChars] = useState(500)
+  const [isDarkMode, setIsDarkMode] = useState(false)
 
   useEffect(() => {
-    // Scroll to bottom whenever messages change
-    scrollViewRef.current?.scrollToEnd({ animated: true });
-  }, [messages]);
+    // Add initial welcome message
+    setMessages([{
+      role: 'assistant',
+      content: "Hello! I'm your pastoral assistant. Feel free to share what's on your mind, ask questions about faith, or seek guidance. I'm here to help and provide biblical wisdom for your journey."
+    }])
+  }, [])
 
-  const handleSend = async () => {
-    if (inputText.trim()) {
-      const newMessage: Message = {
-        id: Date.now().toString(),
-        text: inputText.trim(),
-        isUser: true,
-        timestamp: new Date(),
-      };
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || loading) return
 
-      setMessages(prev => [...prev, newMessage]);
-      setInputText('');
+    try {
+      setLoading(true)
+      const userMessage = newMessage.trim()
+      
+      // Add the user message to the UI immediately
+      const newUserMessage = { role: 'user' as const, content: userMessage }
+      setMessages(prev => [...prev, newUserMessage])
+      setNewMessage('')
+      setRemainingChars(120)
 
-      try {
-        // Get the current session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
-        if (!session) throw new Error('No active session');
+      // Get the current session
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('No session')
 
-        // Update chat history with user's message
-        const updatedHistory = [
-          ...chatHistory,
-          { role: 'user', content: newMessage.text }
-        ];
-        setChatHistory(updatedHistory);
-
-        // Call the edge function with auth token and chat history
-        const { data, error } = await supabase.functions.invoke('chat', {
-          body: { 
-            text: newMessage.text,
-            messages: updatedHistory
-          },
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        });
-
-        if (error) throw error;
-
-        // Add the bot response to chat history
-        setChatHistory(prev => [...prev, { role: 'assistant', content: data.message }]);
-
-        // Add the bot response to messages
-        const botResponse: Message = {
-          id: (Date.now() + 1).toString(),
-          text: data.message,
-          isUser: false,
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, botResponse]);
-      } catch (error: any) {
-        console.error('Error calling edge function:', error);
-        // Add an error message
-        const errorResponse: Message = {
-          id: (Date.now() + 1).toString(),
-          text: error?.message || 'Sorry, there was an error processing your message.',
-          isUser: false,
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, errorResponse]);
-      }
-    }
-  };
-
-  const handleKeyPress = (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
-    // On web, we need to handle the shift+enter case
-    if (Platform.OS === 'web') {
-      const nativeEvent = e.nativeEvent as unknown as KeyboardEvent;
-      if (nativeEvent.key === 'Enter') {
-        if (!nativeEvent.shiftKey) {
-          e.preventDefault?.();
-          handleSend();
-          // Refocus the input after sending
-          inputRef.current?.focus();
-          return false;
+      // Send the message to the Edge Function
+      const { data, error } = await supabase.functions.invoke('chat', {
+        body: { 
+          messages: [...messages, newUserMessage]
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
         }
-        return true;
+      })
+
+      if (error) {
+        console.error('Edge Function Error:', error)
+        throw error
       }
-    } else if (e.nativeEvent.key === 'Enter') {
-      // On mobile, Enter always sends
-      handleSend();
-      return false;
-    }
-    return true;
-  };
 
-  const handleChangeText = (text: string) => {
-    if (text.length <= MAX_CHARS) {
-      setInputText(text);
-    }
-  };
+      if (!data?.message) {
+        console.error('Invalid response:', data)
+        throw new Error('Invalid response from chat function')
+      }
 
-  const getCharCountStyle = () => {
-    const remaining = MAX_CHARS - inputText.length;
-    if (remaining <= 20) {
-      return styles.charCountWarning;
+      // Add the assistant's response to the UI
+      setMessages(prev => [...prev, { 
+        role: 'assistant' as const, 
+        content: data.message 
+      }])
+    } catch (error) {
+      console.error('Error:', error)
+      if (error instanceof Error) {
+        alert(error.message)
+      }
+    } finally {
+      setLoading(false)
     }
-    if (remaining <= 50) {
-      return styles.charCountCaution;
-    }
-    return [styles.charCount, isDarkMode && styles.charCountDark];
-  };
+  }
 
-  const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
-  };
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
+    }
+  }
+
+  const getThemeColors = () => {
+    if (isDarkMode) {
+      return {
+        background: '#1A1A1A',
+        cardBackground: '#2D2D2D',
+        text: '#FFFFFF',
+        subtext: '#B0B0B0',
+        userMessage: '#8B5E34',
+        assistantMessage: '#3D3D3D',
+        inputBackground: '#3D3D3D',
+        inputBorder: '#4D4D4D',
+        charCount: '#B0B0B0',
+        charCountBg: '#3D3D3D',
+      }
+    }
+    return {
+      background: '#FBF7F4',
+      cardBackground: 'white',
+      text: '#4A3728',
+      subtext: '#6B584A',
+      userMessage: '#8B5E34',
+      assistantMessage: '#F5EDE6',
+      inputBackground: 'white',
+      inputBorder: '#D4C5B9',
+      charCount: '#6B584A',
+      charCountBg: '#F5EDE6',
+    }
+  }
+
+  const colors = getThemeColors()
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={[styles.container, isDarkMode && styles.containerDark]}
-    >
-      <View style={[styles.header, isDarkMode && styles.headerDark]}>
-        <Button
-          type="clear"
-          icon={{ name: 'arrow-back', color: isDarkMode ? '#e2e8f0' : '#4a5568' }}
-          onPress={() => router.back()}
-        />
-        <Text style={[styles.headerTitle, isDarkMode && styles.headerTitleDark]}>Chat Assistant</Text>
-        <Button
-          type="clear"
-          icon={{ 
-            name: isDarkMode ? 'light-mode' : 'dark-mode', 
-            color: isDarkMode ? '#e2e8f0' : '#4a5568',
-            type: 'material'
-          }}
-          onPress={toggleDarkMode}
-        />
-      </View>
-
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.messagesContainer}
-        contentContainerStyle={styles.messagesContent}
-      >
-        {messages.map((message) => (
-          <View
-            key={message.id}
-            style={[
-              styles.messageBubble,
-              message.isUser ? styles.userMessage : [styles.botMessage, isDarkMode && styles.botMessageDark],
-            ]}
-          >
-            <Text 
-              style={[
-                styles.messageText,
-                message.isUser ? styles.userMessageText : isDarkMode && styles.messageTextDark,
-                Platform.OS === 'web' && { whiteSpace: 'pre-wrap' } as any
-              ]}
-            >
-              {message.text}
-            </Text>
-            <Text style={[
-              styles.timestamp,
-              message.isUser ? styles.userTimestamp : isDarkMode && styles.timestampDark
-            ]}>
-              {message.timestamp.toLocaleTimeString([], { 
-                hour: '2-digit', 
-                minute: '2-digit' 
-              })}
-            </Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <View style={{ flex: 1 }} />
+            <View style={styles.titleContainer}>
+              <Text style={[styles.title, { color: colors.text }]}>Pastor Chat</Text>
+              <Text style={[styles.subtitle, { color: colors.subtext }]}>
+                Start a conversation with a Pastor!
+              </Text>
+            </View>
+            <View style={styles.themeToggleContainer}>
+              <Button
+                icon={
+                  <Icon
+                    name={isDarkMode ? 'sunny-outline' : 'moon-outline'}
+                    type="ionicon"
+                    color={colors.text}
+                    size={24}
+                  />
+                }
+                type="clear"
+                onPress={() => setIsDarkMode(!isDarkMode)}
+              />
+            </View>
           </View>
-        ))}
-      </ScrollView>
+          <View style={[styles.divider, { backgroundColor: colors.inputBorder }]} />
+        </View>
 
-      <View style={[styles.inputContainer, isDarkMode && styles.inputContainerDark]}>
-        <View style={[styles.inputWrapper, isDarkMode && styles.inputWrapperDark]}>
-          <View style={styles.textInputContainer}>
-            <TextInput
-              ref={inputRef}
-              style={[
-                styles.input,
-                isDarkMode && styles.inputDark,
-                Platform.OS === 'web' && { whiteSpace: 'pre-wrap' } as any
-              ]}
-              value={inputText}
-              onChangeText={handleChangeText}
-              placeholder="Type your message... (Press Enter to send, Shift+Enter for new line)"
-              placeholderTextColor={isDarkMode ? '#718096' : '#a0aec0'}
-              multiline
-              maxLength={MAX_CHARS}
-              onKeyPress={handleKeyPress}
-              blurOnSubmit={false}
-              returnKeyType="send"
+        <View style={styles.chatContainer}>
+          <ScrollView style={styles.messagesContainer}>
+            {messages.map((message, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.messageWrapper,
+                  message.role === 'user' 
+                    ? [styles.userMessage, { backgroundColor: colors.userMessage }]
+                    : [styles.assistantMessage, { backgroundColor: colors.assistantMessage }],
+                ]}
+              >
+                <Text style={[
+                  styles.messageText,
+                  message.role === 'user' 
+                    ? styles.userMessageText
+                    : [styles.assistantMessageText, { color: colors.text }],
+                ]}>
+                  {message.content}
+                </Text>
+              </View>
+            ))}
+          </ScrollView>
+
+          <View style={[styles.inputContainer, { borderTopColor: colors.inputBorder }]}>
+            <textarea
+              value={newMessage}
+              onChange={(e) => {
+                const text = e.target.value
+                if (text.length <= 500) {
+                  setNewMessage(text)
+                  setRemainingChars(500 - text.length)
+                }
+              }}
+              onKeyDown={handleKeyPress}
+              placeholder="Type your message here..."
+              style={{
+                width: '100%',
+                minHeight: 80,
+                maxHeight: 120,
+                padding: 16,
+                borderWidth: 1.5,
+                borderRadius: 12,
+                fontSize: 16,
+                fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
+                backgroundColor: colors.inputBackground,
+                borderColor: colors.inputBorder,
+                color: colors.text,
+                resize: 'none',
+                outline: 'none',
+              } as React.CSSProperties}
+              maxLength={500}
             />
-          </View>
-          <View style={[styles.charCountContainer, isDarkMode && styles.charCountContainerDark]}>
-            <Text style={getCharCountStyle()}>
-              {MAX_CHARS - inputText.length}
-            </Text>
+            <View style={styles.inputFooter}>
+              <Text style={[
+                styles.charCount,
+                { 
+                  color: colors.charCount,
+                  backgroundColor: colors.charCountBg,
+                },
+                remainingChars <= 20 ? styles.charCountWarning : null,
+                remainingChars <= 10 ? styles.charCountDanger : null,
+              ]}>
+                {remainingChars}
+              </Text>
+              <Button
+                title={loading ? "Sending..." : "Send"}
+                onPress={handleSendMessage}
+                disabled={loading || !newMessage.trim()}
+                buttonStyle={[styles.sendButton, { backgroundColor: colors.userMessage }]}
+                disabledStyle={styles.sendButtonDisabled}
+              />
+            </View>
           </View>
         </View>
-        <Button
-          icon={{ name: 'send', color: inputText.trim() ? 'white' : (isDarkMode ? '#222222' : '#718096') }}
-          onPress={handleSend}
-          buttonStyle={[
-            styles.sendButton,
-            isDarkMode && styles.sendButtonDark,
-            !inputText.trim() && (isDarkMode ? styles.sendButtonDisabledDark : styles.sendButtonDisabled)
-          ]}
-          disabled={!inputText.trim()}
-          disabledStyle={{}}
-        />
       </View>
-    </KeyboardAvoidingView>
-  );
+    </View>
+  )
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f7fafc',
+    padding: 20,
   },
-  containerDark: {
-    backgroundColor: '#000000',
+  card: {
+    borderRadius: 16,
+    padding: 40,
+    maxWidth: 800,
+    width: '100%',
+    height: '100%',
+    alignSelf: 'center',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 20px rgba(0, 0, 0, 0.15)',
+      },
+      default: {
+        shadowColor: '#000000',
+        shadowOffset: {
+          width: 0,
+          height: 4,
+        },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 4,
+      },
+    }),
   },
   header: {
+    marginBottom: 24,
+  },
+  headerTop: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 24,
+  },
+  titleContainer: {
+    flex: 3,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
   },
-  headerDark: {
-    backgroundColor: '#111111',
-    borderBottomColor: '#222222',
+  themeToggleContainer: {
+    flex: 1,
+    alignItems: 'flex-end',
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2d3748',
+  title: {
+    fontSize: 36,
+    fontFamily: Platform.select({ web: 'Palatino, serif', default: 'serif' }),
+    fontWeight: '600',
+    marginBottom: 12,
+    textAlign: 'center',
   },
-  headerTitleDark: {
-    color: '#ffffff',
+  subtitle: {
+    textAlign: 'center',
+    fontSize: 17,
+    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
+    lineHeight: 24,
+  },
+  divider: {
+    height: 1,
+    width: '100%',
+  },
+  chatContainer: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
   },
   messagesContainer: {
     flex: 1,
+    marginBottom: 20,
   },
-  messagesContent: {
+  messageWrapper: {
+    marginBottom: 16,
     padding: 16,
-  },
-  messageBubble: {
+    borderRadius: 12,
     maxWidth: '80%',
-    padding: 12,
-    borderRadius: 16,
-    marginBottom: 8,
   },
   userMessage: {
-    backgroundColor: '#5469d4',
     alignSelf: 'flex-end',
-    borderTopRightRadius: 4,
   },
-  botMessage: {
-    backgroundColor: 'white',
+  assistantMessage: {
     alignSelf: 'flex-start',
-    borderTopLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  botMessageDark: {
-    backgroundColor: '#1a1a1a',
-    borderColor: '#333333',
   },
   messageText: {
     fontSize: 16,
-    color: '#2d3748',
-  },
-  messageTextDark: {
-    color: '#ffffff',
+    lineHeight: 24,
+    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
   },
   userMessageText: {
     color: 'white',
   },
-  timestamp: {
-    fontSize: 12,
-    color: '#a0aec0',
-    marginTop: 4,
-    alignSelf: 'flex-end',
-  },
-  timestampDark: {
-    color: '#888888',
-  },
-  userTimestamp: {
-    color: 'rgba(255, 255, 255, 0.8)',
+  assistantMessageText: {
+    color: '#4A3728',
   },
   inputContainer: {
-    flexDirection: 'row',
-    padding: 16,
-    backgroundColor: 'white',
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    alignItems: 'flex-end',
+    paddingTop: 20,
   },
-  inputContainerDark: {
-    backgroundColor: '#111111',
-    borderTopColor: '#222222',
-  },
-  inputWrapper: {
-    flex: 1,
+  inputFooter: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    marginRight: 8,
-    backgroundColor: '#f7fafc',
-    borderRadius: 20,
-    paddingRight: 8,
-    paddingVertical: 4,
-  },
-  inputWrapperDark: {
-    backgroundColor: '#1a1a1a',
-  },
-  textInputContainer: {
-    flex: 1,
-    marginRight: 8,
-  },
-  input: {
-    minHeight: 40,
-    maxHeight: 100,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 8,
-    fontSize: 16,
-    color: '#2d3748',
-  },
-  inputDark: {
-    color: '#ffffff',
-  },
-  charCountContainer: {
-    backgroundColor: '#e2e8f0',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    alignSelf: 'center',
-    minWidth: 45,
-  },
-  charCountContainerDark: {
-    backgroundColor: '#333333',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
   },
   charCount: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#4a5568',
-    textAlign: 'center',
-  },
-  charCountDark: {
-    color: '#ffffff',
-  },
-  charCountCaution: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#d97706',
-    textAlign: 'center',
+    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
   },
   charCountWarning: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#dc2626',
-    textAlign: 'center',
+    color: '#92400E',
+    backgroundColor: '#FEF3C7',
+  },
+  charCountDanger: {
+    color: '#B45309',
+    backgroundColor: '#FEF2F2',
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    padding: 0,
-    backgroundColor: '#5469d4',
-  },
-  sendButtonDark: {
-    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    paddingHorizontal: 24,
+    height: 44,
   },
   sendButtonDisabled: {
-    backgroundColor: '#94a3b8',
+    backgroundColor: '#D4C5B9',
   },
-  sendButtonDisabledDark: {
-    backgroundColor: '#0a0a0a',
-  },
-}); 
+} as const); 

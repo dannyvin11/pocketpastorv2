@@ -6,8 +6,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 interface ChatMessage {
-  text: string;
-  messages?: { role: string; content: string; }[];
+  messages: { role: string; content: string; }[];
 }
 
 interface OpenAIResponse {
@@ -78,8 +77,7 @@ serve(async (req) => {
     const body = await req.json();
     console.log('📥 Received request body:', body);
 
-    const { text, messages = [] } = body as ChatMessage;
-    console.log('📝 Extracted text:', text);
+    const { messages = [] } = body as ChatMessage;
     console.log('💬 Chat history:', messages);
 
     // Get OpenAI API key from environment variable
@@ -91,29 +89,26 @@ serve(async (req) => {
     // Prepare messages array with system prompt and chat history
     const systemPrompt = {
       role: 'system',
-      content: `You are a compassionate pastor providing guidance through this chat interface only. Respond in a warm, conversational tone while keeping these guidelines in mind:
+      content: `You are a compassionate pastor providing guidance through this chat interface only by summarizing the bible verses and providing practical, actionable guidance. Respond in a warm, conversational tone while keeping these guidelines in mind:
 
 - Focus on providing direct guidance and support through this chat only, make sure it can be actionable for the user
+- Try to make your response concise minimizing long paragraphs
 - Never suggest meeting them in person
 - Never imply you're part of a real church or congregation
 - Speak naturally and avoid listing or itemizing responses unless asked by the user
 - Focus on understanding and addressing the person's situation
-- Offer practical, actionable guidance they can implement on their own
-- If relevant, weave in a single or multiple Bible verses that directly relates to their situation
+- Offer practical, actionable guidance they can implement to resolve their situation
+- If applicable for the problem, weave in a single or multiple Bible verses that directly relates to their situation
 - Ask gentle follow-up questions when needed to better understand their situation
 - Avoid continuously being apologetic and saying sorry
 
-Remember: This is a casual chat conversation, not a formal counseling session or sermon.`
+Remember: This is a conversation inteded to help the user, not a formal counseling session or sermon.`
     };
 
-    const conversationMessages = [
-      systemPrompt,
-      ...messages,
-      { role: 'user', content: text }
-    ];
+    const conversationMessages = [systemPrompt, ...messages];
 
     // Call OpenAI API
-    console.log('🤖 Calling OpenAI API...');
+    console.log('🤖 Calling OpenAI API with messages:', conversationMessages);
     const openAiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -121,7 +116,7 @@ Remember: This is a casual chat conversation, not a formal counseling session or
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4',
         messages: conversationMessages,
         max_tokens: 250,
         temperature: 0.9,
