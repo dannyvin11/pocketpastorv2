@@ -1,19 +1,138 @@
 import React, { useState, useEffect } from 'react'
-import { View, StyleSheet, Platform, ScrollView } from 'react-native'
-import { Text, Button, Icon } from '@rneui/themed'
+import { 
+  View, 
+  StyleSheet, 
+  Platform, 
+  ScrollView, 
+  TextInput, 
+  KeyboardAvoidingView,
+  SafeAreaView,
+  Keyboard,
+  TouchableWithoutFeedback,
+  Dimensions,
+  Pressable,
+  ActivityIndicator
+} from 'react-native'
+import { Text, Icon } from '@rneui/themed'
 import { supabase } from '../../lib/supabase'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { useRouter } from 'expo-router'
 
 interface Message {
   role: 'user' | 'assistant'
   content: string
 }
 
+const WebTextArea = ({ 
+  value, 
+  onChangeText, 
+  onSubmit, 
+  placeholder,
+  maxLength,
+  style,
+  isDarkMode
+}: { 
+  value: string
+  onChangeText: (text: string) => void
+  onSubmit: () => void
+  placeholder: string
+  maxLength: number
+  style: any
+  isDarkMode: boolean
+}) => {
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      onSubmit()
+    }
+  }
+
+  const webStyle = Platform.OS === 'web' ? {
+    flex: 1,
+    outline: 'none',
+    resize: 'none' as const,
+    border: `1.5px solid ${isDarkMode ? '#4D4D4D' : '#D4C5B9'}`,
+    backgroundColor: isDarkMode ? '#2D2D2D' : '#FFFFFF',
+    color: isDarkMode ? '#FFFFFF' : '#4A3728',
+    fontSize: '16px',
+    fontFamily: 'Georgia, serif',
+    borderRadius: '12px',
+    padding: '8px 12px',
+    height: '40px',
+    width: '100%',
+    boxSizing: 'border-box' as const,
+    overflow: 'hidden' as const,
+  } : {}
+
+  return Platform.OS === 'web' ? (
+    <textarea
+      value={value}
+      onChange={(e) => onChangeText(e.target.value)}
+      onKeyDown={handleKeyPress}
+      placeholder={placeholder}
+      style={webStyle}
+      maxLength={maxLength}
+    />
+  ) : (
+    <TextInput
+      value={value}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor={isDarkMode ? '#6B6B6B' : '#9CA3AF'}
+      multiline
+      maxLength={maxLength}
+      style={[style, { textAlignVertical: 'top' }]}
+      onSubmitEditing={onSubmit}
+      keyboardAppearance={isDarkMode ? 'dark' : 'light'}
+    />
+  )
+}
+
 export default function Chat() {
+  const router = useRouter()
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const [remainingChars, setRemainingChars] = useState(500)
   const [isDarkMode, setIsDarkMode] = useState(false)
+
+  // Load saved theme preference
+  useEffect(() => {
+    const loadThemePreference = async () => {
+      try {
+        if (Platform.OS === 'web') {
+          const savedTheme = localStorage.getItem('themePreference')
+          if (savedTheme !== null) {
+            setIsDarkMode(savedTheme === 'dark')
+          }
+        } else {
+          const savedTheme = await AsyncStorage.getItem('themePreference')
+          if (savedTheme !== null) {
+            setIsDarkMode(savedTheme === 'dark')
+          }
+        }
+      } catch (error) {
+        console.error('Error loading theme preference:', error)
+      }
+    }
+
+    loadThemePreference()
+  }, [])
+
+  // Save theme preference when it changes
+  const handleThemeChange = async (darkMode: boolean) => {
+    try {
+      const themeValue = darkMode ? 'dark' : 'light'
+      if (Platform.OS === 'web') {
+        localStorage.setItem('themePreference', themeValue)
+      } else {
+        await AsyncStorage.setItem('themePreference', themeValue)
+      }
+      setIsDarkMode(darkMode)
+    } catch (error) {
+      console.error('Error saving theme preference:', error)
+    }
+  }
 
   useEffect(() => {
     // Add initial welcome message
@@ -34,7 +153,7 @@ export default function Chat() {
       const newUserMessage = { role: 'user' as const, content: userMessage }
       setMessages(prev => [...prev, newUserMessage])
       setNewMessage('')
-      setRemainingChars(120)
+      setRemainingChars(500)
 
       // Get the current session
       const { data: { session } } = await supabase.auth.getSession()
@@ -85,7 +204,7 @@ export default function Chat() {
   const getThemeColors = () => {
     if (isDarkMode) {
       return {
-        background: '#1A1A1A',
+        background: '#2D2D2D',
         cardBackground: '#2D2D2D',
         text: '#FFFFFF',
         subtext: '#B0B0B0',
@@ -98,13 +217,13 @@ export default function Chat() {
       }
     }
     return {
-      background: '#FBF7F4',
-      cardBackground: 'white',
+      background: '#FFFFFF',
+      cardBackground: '#FFFFFF',
       text: '#4A3728',
       subtext: '#6B584A',
       userMessage: '#8B5E34',
       assistantMessage: '#F5EDE6',
-      inputBackground: 'white',
+      inputBackground: '#FFFFFF',
       inputBorder: '#D4C5B9',
       charCount: '#6B584A',
       charCountBg: '#F5EDE6',
@@ -113,240 +232,248 @@ export default function Chat() {
 
   const colors = getThemeColors()
 
+  // Update theme toggle button in both web and iOS renders
+  const themeToggleButton = (
+    <Pressable
+      onPress={() => handleThemeChange(!isDarkMode)}
+      style={({ pressed }) => [
+        styles.iconButton,
+        pressed && { opacity: 0.7 }
+      ]}
+    >
+      <Icon
+        name={isDarkMode ? 'sunny-outline' : 'moon-outline'}
+        type="ionicon"
+        color={colors.text}
+        size={24}
+      />
+    </Pressable>
+  )
+
+  // Back button component
+  const BackButton = (
+    <Pressable
+      onPress={() => router.replace('/(app)/account')}
+      style={({ pressed }) => [
+        styles.iconButton,
+        pressed && { opacity: 0.7 }
+      ]}
+    >
+      <Icon
+        name="arrow-back-outline"
+        type="ionicon"
+        color={colors.text}
+        size={24}
+      />
+    </Pressable>
+  )
+
+  // Add windowHeight to track viewport height for mobile
+  const windowHeight = Platform.OS === 'web' ? Dimensions.get('window').height : undefined;
+
+  // Update the main return JSX to better handle mobile web
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <View style={{ flex: 1 }} />
-            <View style={styles.titleContainer}>
-              <Text style={[styles.title, { color: colors.text }]}>Pastor Chat</Text>
-              <Text style={[styles.subtitle, { color: colors.subtext }]}>
-                Start a conversation with a Pastor!
-              </Text>
-            </View>
-            <View style={styles.themeToggleContainer}>
-              <Button
-                icon={
-                  <Icon
-                    name={isDarkMode ? 'sunny-outline' : 'moon-outline'}
-                    type="ionicon"
-                    color={colors.text}
-                    size={24}
-                  />
-                }
-                type="clear"
-                onPress={() => setIsDarkMode(!isDarkMode)}
-              />
-            </View>
-          </View>
-          <View style={[styles.divider, { backgroundColor: colors.inputBorder }]} />
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={[
+        styles.container, 
+        { backgroundColor: colors.background },
+        Platform.OS === 'web' && { height: windowHeight }
+      ]}
+    >
+      <SafeAreaView style={{ flex: 1 }}>
+        <View style={[styles.header, { backgroundColor: colors.cardBackground }]}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            Pastoral Chat
+          </Text>
+          {themeToggleButton}
         </View>
 
-        <View style={styles.chatContainer}>
-          <ScrollView style={styles.messagesContainer}>
-            {messages.map((message, index) => (
+        <ScrollView 
+          style={[styles.messagesContainer, { backgroundColor: colors.background }]}
+          contentContainerStyle={styles.messagesContent}
+        >
+          {messages.map((message, index) => (
+            <View
+              key={index}
+              style={[
+                styles.messageWrapper,
+                message.role === 'user' ? styles.userMessageWrapper : styles.assistantMessageWrapper
+              ]}
+            >
               <View
-                key={index}
                 style={[
-                  styles.messageWrapper,
-                  message.role === 'user' 
+                  styles.message,
+                  message.role === 'user'
                     ? [styles.userMessage, { backgroundColor: colors.userMessage }]
-                    : [styles.assistantMessage, { backgroundColor: colors.assistantMessage }],
+                    : [styles.assistantMessage, { backgroundColor: colors.assistantMessage }]
                 ]}
               >
-                <Text style={[
-                  styles.messageText,
-                  message.role === 'user' 
-                    ? styles.userMessageText
-                    : [styles.assistantMessageText, { color: colors.text }],
-                ]}>
+                <Text
+                  style={[
+                    styles.messageText,
+                    { color: message.role === 'user' ? '#FFFFFF' : colors.text }
+                  ]}
+                >
                   {message.content}
                 </Text>
               </View>
-            ))}
-          </ScrollView>
+            </View>
+          ))}
+        </ScrollView>
 
-          <View style={[styles.inputContainer, { borderTopColor: colors.inputBorder }]}>
-            <textarea
-              value={newMessage}
-              onChange={(e) => {
-                const text = e.target.value
-                if (text.length <= 500) {
-                  setNewMessage(text)
-                  setRemainingChars(500 - text.length)
-                }
-              }}
-              onKeyDown={handleKeyPress}
-              placeholder="Type your message here..."
-              style={{
-                width: '100%',
-                minHeight: 80,
-                maxHeight: 120,
-                padding: 16,
-                borderWidth: 1.5,
-                borderRadius: 12,
-                fontSize: 16,
-                fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
+        <View style={[styles.inputContainer, { backgroundColor: colors.cardBackground }]}>
+          <WebTextArea
+            value={newMessage}
+            onChangeText={(text) => {
+              setNewMessage(text)
+              setRemainingChars(500 - text.length)
+            }}
+            onSubmit={handleSendMessage}
+            placeholder="Type your message..."
+            maxLength={500}
+            style={[
+              styles.input,
+              {
                 backgroundColor: colors.inputBackground,
                 borderColor: colors.inputBorder,
-                color: colors.text,
-                resize: 'none',
-                outline: 'none',
-              } as React.CSSProperties}
-              maxLength={500}
-            />
-            <View style={styles.inputFooter}>
-              <Text style={[
+                color: colors.text
+              }
+            ]}
+            isDarkMode={isDarkMode}
+          />
+          <View style={styles.inputRightContainer}>
+            <View
+              style={[
                 styles.charCount,
-                { 
-                  color: colors.charCount,
-                  backgroundColor: colors.charCountBg,
-                },
-                remainingChars <= 20 ? styles.charCountWarning : null,
-                remainingChars <= 10 ? styles.charCountDanger : null,
-              ]}>
+                { backgroundColor: colors.charCountBg }
+              ]}
+            >
+              <Text style={[styles.charCountText, { color: colors.charCount }]}>
                 {remainingChars}
               </Text>
-              <Button
-                title={loading ? "Sending..." : "Send"}
-                onPress={handleSendMessage}
-                disabled={loading || !newMessage.trim()}
-                buttonStyle={[styles.sendButton, { backgroundColor: colors.userMessage }]}
-                disabledStyle={styles.sendButtonDisabled}
-              />
             </View>
+            <Pressable
+              onPress={handleSendMessage}
+              disabled={loading || !newMessage.trim()}
+              style={({ pressed }) => [
+                styles.sendButton,
+                { backgroundColor: colors.userMessage },
+                (loading || !newMessage.trim()) && styles.buttonDisabled,
+                pressed && { opacity: 0.7 }
+              ]}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Icon name="send" type="ionicon" color="#FFFFFF" size={20} />
+              )}
+            </Pressable>
           </View>
         </View>
-      </View>
-    </View>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-  },
-  card: {
-    borderRadius: 16,
-    padding: 40,
-    maxWidth: 800,
-    width: '100%',
-    height: '100%',
-    alignSelf: 'center',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 8px 20px rgba(0, 0, 0, 0.15)',
-      },
-      default: {
-        shadowColor: '#000000',
-        shadowOffset: {
-          width: 0,
-          height: 4,
-        },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-        elevation: 4,
-      },
-    }),
   },
   header: {
-    marginBottom: 24,
-  },
-  headerTop: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 24,
-  },
-  titleContainer: {
-    flex: 3,
     alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: Platform.select({ web: 20, default: 16 }),
+    borderBottomWidth: 1,
+    borderBottomColor: Platform.select({ web: '#E5E7EB', default: 'transparent' }),
   },
-  themeToggleContainer: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
-  title: {
-    fontSize: 36,
-    fontFamily: Platform.select({ web: 'Palatino, serif', default: 'serif' }),
+  headerTitle: {
+    fontSize: Platform.select({ web: 24, default: 20 }),
     fontWeight: '600',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  subtitle: {
-    textAlign: 'center',
-    fontSize: 17,
     fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
-    lineHeight: 24,
-  },
-  divider: {
-    height: 1,
-    width: '100%',
-  },
-  chatContainer: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
   },
   messagesContainer: {
     flex: 1,
-    marginBottom: 20,
+  },
+  messagesContent: {
+    padding: Platform.select({ web: 20, default: 16 }),
+    gap: 16,
   },
   messageWrapper: {
-    marginBottom: 16,
-    padding: 16,
-    borderRadius: 12,
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  userMessageWrapper: {
+    justifyContent: 'flex-end',
+  },
+  assistantMessageWrapper: {
+    justifyContent: 'flex-start',
+  },
+  message: {
     maxWidth: '80%',
+    borderRadius: 16,
+    padding: Platform.select({ web: 16, default: 12 }),
   },
   userMessage: {
-    alignSelf: 'flex-end',
+    borderTopRightRadius: 4,
   },
   assistantMessage: {
-    alignSelf: 'flex-start',
+    borderTopLeftRadius: 4,
   },
   messageText: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: Platform.select({ web: 16, default: 15 }),
+    lineHeight: Platform.select({ web: 24, default: 22 }),
     fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
-  },
-  userMessageText: {
-    color: 'white',
-  },
-  assistantMessageText: {
-    color: '#4A3728',
   },
   inputContainer: {
-    borderTopWidth: 1,
-    paddingTop: 20,
-  },
-  inputFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
+    alignItems: 'flex-end',
+    padding: Platform.select({ web: 20, default: 16 }),
+    borderTopWidth: 1,
+    borderTopColor: Platform.select({ web: '#E5E7EB', default: 'transparent' }),
+    gap: 12,
+  },
+  input: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 40,
+    maxHeight: 120,
+    fontSize: Platform.select({ web: 16, default: 15 }),
+    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
+  },
+  inputRightContainer: {
+    flexDirection: 'column',
+    gap: 8,
+    justifyContent: 'flex-end',
   },
   charCount: {
-    fontSize: 14,
-    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
-    paddingVertical: 4,
     paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 8,
   },
-  charCountWarning: {
-    color: '#92400E',
-    backgroundColor: '#FEF3C7',
-  },
-  charCountDanger: {
-    color: '#B45309',
-    backgroundColor: '#FEF2F2',
+  charCountText: {
+    fontSize: 12,
+    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
   },
   sendButton: {
-    borderRadius: 12,
-    paddingHorizontal: 24,
-    height: 44,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  sendButtonDisabled: {
-    backgroundColor: '#D4C5B9',
+  buttonDisabled: {
+    opacity: 0.5,
   },
-} as const); 
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+}); 

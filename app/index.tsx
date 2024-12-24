@@ -1,5 +1,5 @@
-import { View, StyleSheet, Platform } from 'react-native';
-import { Text, Button } from '@rneui/themed';
+import { View, StyleSheet, Platform, Pressable, ScrollView, Text as RNText } from 'react-native';
+import { Text } from '@rneui/themed';
 import { Link } from 'expo-router';
 import { useEffect } from 'react';
 import { supabase } from '../lib/supabase';
@@ -26,7 +26,7 @@ export default function Index() {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       <View style={styles.content}>
         <View style={styles.header}>
           <Text style={styles.title}>Biblical Guidance Chat</Text>
@@ -50,11 +50,16 @@ export default function Index() {
 
         <View style={styles.cta}>
           <Link href="/auth" asChild>
-            <Button
-              title="Get Started"
-              buttonStyle={styles.ctaButton}
-              titleStyle={styles.ctaButtonText}
-            />
+            <View style={styles.ctaButtonWrapper}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.ctaButton,
+                  pressed && styles.ctaButtonPressed
+                ]}
+              >
+                <RNText style={styles.ctaButtonText}>Get Started</RNText>
+              </Pressable>
+            </View>
           </Link>
           <Text style={styles.ctaSubtext}>Join thousands finding guidance through scripture</Text>
         </View>
@@ -63,7 +68,7 @@ export default function Index() {
       <View style={styles.footer}>
         <Text style={styles.footerText}>© 2024 Biblical Guidance Chat. All rights reserved.</Text>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -72,90 +77,171 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
+  scrollContent: {
+    flexGrow: 1,
+    minHeight: '100%',
+  },
   content: {
     flex: 1,
-    padding: 32,
+    padding: Platform.select({
+      web: 32,
+      default: 20
+    }),
     maxWidth: 1200,
     width: '100%',
     alignSelf: 'center',
-    justifyContent: 'center',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 64,
+    marginBottom: Platform.select({
+      web: 64,
+      default: 40
+    }),
+    paddingTop: Platform.select({
+      web: 64,
+      default: 40
+    }),
   },
   title: {
-    fontSize: 48,
+    fontSize: Platform.select({
+      web: 48,
+      default: 32
+    }),
     fontWeight: 'bold',
     color: '#1e293b',
     textAlign: 'center',
     marginBottom: 16,
+    paddingHorizontal: 20,
   },
   subtitle: {
-    fontSize: 20,
+    fontSize: Platform.select({
+      web: 20,
+      default: 16
+    }),
     color: '#64748b',
     textAlign: 'center',
     maxWidth: 600,
+    paddingHorizontal: 20,
   },
   features: {
     flexDirection: 'row',
     justifyContent: 'center',
     flexWrap: 'wrap',
-    gap: 32,
-    marginBottom: 64,
+    gap: Platform.select({
+      web: 32,
+      default: 16
+    }),
+    marginBottom: Platform.select({
+      web: 64,
+      default: 40
+    }),
   },
   featureItem: {
     flex: 1,
-    minWidth: 280,
-    maxWidth: 320,
+    minWidth: Platform.OS === 'web' ? 280 : '100%',
+    maxWidth: Platform.OS === 'web' ? 320 : '100%',
     backgroundColor: 'white',
-    padding: 24,
+    padding: Platform.select({
+      web: 24,
+      default: 20
+    }),
     borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+      },
+      default: {
+        elevation: 2
+      },
+    }),
   },
   featureTitle: {
-    fontSize: 20,
+    fontSize: Platform.select({
+      web: 20,
+      default: 18
+    }),
     fontWeight: 'bold',
     color: '#1e293b',
     marginBottom: 12,
   },
   featureText: {
-    fontSize: 16,
+    fontSize: Platform.select({
+      web: 16,
+      default: 15
+    }),
     color: '#64748b',
     lineHeight: 24,
   },
   cta: {
     alignItems: 'center',
+    paddingBottom: Platform.select({
+      web: 64,
+      default: 40
+    }),
+    width: '100%',
+  },
+  ctaButtonWrapper: {
+    backgroundColor: '#8B5E34',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 16,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0 4px 6px rgba(139, 94, 52, 0.25)',
+    } : {
+      elevation: 5
+    }),
   },
   ctaButton: {
-    backgroundColor: '#5469d4',
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 8,
-    minWidth: 200,
+    paddingHorizontal: Platform.OS === 'web' ? 32 : 24,
+    paddingVertical: Platform.OS === 'web' ? 16 : 14,
+    width: Platform.OS === 'web' ? 'auto' : '90%',
+    minWidth: Platform.OS === 'web' ? 200 : 'auto',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#8B5E34',
+    ...(Platform.OS === 'web' ? {
+      cursor: 'pointer',
+    } : {}),
+  },
+  ctaButtonPressed: {
+    opacity: 0.9,
+    backgroundColor: '#7A5230',
   },
   ctaButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: Platform.select({
+      web: 18,
+      default: 16
+    }),
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
   },
   ctaSubtext: {
     marginTop: 16,
-    fontSize: 16,
+    fontSize: Platform.select({
+      web: 16,
+      default: 14
+    }),
     color: '#64748b',
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
   footer: {
-    padding: 24,
+    padding: Platform.select({
+      web: 24,
+      default: 20
+    }),
     backgroundColor: 'white',
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
   },
   footerText: {
-    fontSize: 14,
+    fontSize: Platform.select({
+      web: 14,
+      default: 12
+    }),
     color: '#94a3b8',
   },
 }); 

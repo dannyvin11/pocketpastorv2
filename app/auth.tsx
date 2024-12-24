@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
-import { View, StyleSheet, Platform } from 'react-native'
+import { View, StyleSheet, Platform, TextInput, Pressable } from 'react-native'
 import { supabase } from '../lib/supabase'
-import { Button, Text } from '@rneui/themed'
+import { Button, Text, Icon } from '@rneui/themed'
 import { useRouter } from 'expo-router'
 
 interface AuthFormProps {
@@ -52,10 +52,10 @@ const WebInput = ({ type, value, onChange, placeholder, onEnterPress }: {
       autoComplete={type === 'email' ? 'email' : type === 'password' ? 'current-password' : undefined}
       spellCheck={type === 'email' ? false : undefined}
       style={{
-        flex: 1,
+        flex: '1 1 0%',
         height: '100%',
-        paddingLeft: 12,
-        paddingRight: 12,
+        paddingLeft: 0,
+        paddingRight: 8,
         fontSize: 17,
         color: '#4A3728',
         border: 'none',
@@ -93,6 +93,33 @@ function AuthForm({
   const hasEmailError = error?.toLowerCase().includes('email') || error?.toLowerCase().includes('account')
   const hasPasswordError = error?.toLowerCase().includes('password')
 
+  const renderIcon = (type: 'email' | 'password', hasError: boolean) => {
+    if (Platform.OS === 'web') {
+      return (
+        <i 
+          className={`fa fa-${type === 'email' ? 'envelope' : 'lock'}`} 
+          style={{
+            color: hasError ? '#dc2626' : '#5469d4',
+            marginLeft: 0,
+            marginRight: 0,
+            fontSize: 16,
+            width: 16,
+            textAlign: 'center',
+          }}
+        />
+      )
+    }
+    return (
+      <Icon
+        name={type === 'email' ? 'mail' : 'lock'}
+        type="feather"
+        size={16}
+        color={hasError ? '#dc2626' : '#5469d4'}
+        style={{ marginLeft: 0, marginRight: 0 }}
+      />
+    )
+  }
+
   return (
     <View style={styles.card}>
       <Text style={styles.title}>
@@ -111,21 +138,28 @@ function AuthForm({
             styles.inputContainer,
             hasEmailError && styles.inputError
           ]}>
-            <i 
-              className="fa fa-envelope" 
-              style={{
-                color: hasEmailError ? '#dc2626' : '#5469d4',
-                marginRight: 12,
-                fontSize: 16,
-              }}
-            />
-            <WebInput
-              type="email"
-              value={email}
-              onChange={onEmailChange}
-              placeholder="email@address.com"
-              onEnterPress={handleSubmit}
-            />
+            {renderIcon('email', Boolean(hasEmailError))}
+            {Platform.OS === 'web' ? (
+              <WebInput
+                type="email"
+                value={email}
+                onChange={onEmailChange}
+                placeholder="email@address.com"
+                onEnterPress={handleSubmit}
+              />
+            ) : (
+              <TextInput
+                style={styles.input}
+                value={email}
+                onChangeText={onEmailChange}
+                placeholder="email@address.com"
+                placeholderTextColor="#9CA3AF"
+                autoCapitalize="none"
+                autoComplete="email"
+                keyboardType="email-address"
+                onSubmitEditing={handleSubmit}
+              />
+            )}
           </View>
         </View>
         <View style={styles.inputWrapper}>
@@ -134,21 +168,28 @@ function AuthForm({
             styles.inputContainer,
             hasPasswordError && styles.inputError
           ]}>
-            <i 
-              className="fa fa-lock" 
-              style={{
-                color: hasPasswordError ? '#dc2626' : '#5469d4',
-                marginRight: 12,
-                fontSize: 16,
-              }}
-            />
-            <WebInput
-              type="password"
-              value={password}
-              onChange={onPasswordChange}
-              placeholder="Password"
-              onEnterPress={handleSubmit}
-            />
+            {renderIcon('password', Boolean(hasPasswordError))}
+            {Platform.OS === 'web' ? (
+              <WebInput
+                type="password"
+                value={password}
+                onChange={onPasswordChange}
+                placeholder="Password"
+                onEnterPress={handleSubmit}
+              />
+            ) : (
+              <TextInput
+                style={styles.input}
+                value={password}
+                onChangeText={onPasswordChange}
+                placeholder="Password"
+                placeholderTextColor="#9CA3AF"
+                secureTextEntry
+                autoCapitalize="none"
+                autoComplete="password"
+                onSubmitEditing={handleSubmit}
+              />
+            )}
           </View>
           {error && (
             <Text style={styles.errorText}>{error}</Text>
@@ -156,24 +197,35 @@ function AuthForm({
         </View>
 
         <View style={styles.buttonContainer}>
-          <Button
-            title={isSignUp ? "Sign up" : "Sign in"}
-            disabled={loading}
+          <Pressable
             onPress={handleSubmit}
-            buttonStyle={styles.primaryButton}
-            loading={loading}
-          />
+            disabled={loading}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              loading && styles.buttonDisabled,
+              pressed && { opacity: 0.7 }
+            ]}
+          >
+            <Text style={styles.buttonText}>
+              {loading ? "Loading..." : (isSignUp ? "Sign up" : "Sign in")}
+            </Text>
+          </Pressable>
 
           <View style={styles.switchContainer}>
             <Text style={styles.switchText}>
               {isSignUp ? 'Already have an account?' : "Don't have an account?"}
             </Text>
-            <Button
-              title={isSignUp ? "Sign in" : "Sign up"}
-              type="clear"
+            <Pressable
               onPress={onToggleMode}
-              titleStyle={styles.switchButton}
-            />
+              style={({ pressed }) => [
+                styles.textButton,
+                pressed && { opacity: 0.7 }
+              ]}
+            >
+              <Text style={styles.switchButtonText}>
+                {isSignUp ? "Sign in" : "Sign up"}
+              </Text>
+            </Pressable>
           </View>
         </View>
       </View>
@@ -347,12 +399,13 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#D4C5B9',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    backgroundColor: 'white',
-    height: 52,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    height: 48,
+    paddingLeft: 0,
+    paddingRight: 0,
+    backgroundColor: '#FFFFFF',
   },
   inputError: {
     borderColor: '#B45309',
@@ -366,14 +419,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#8B5E34',
     borderRadius: 12,
     height: 52,
-    shadowColor: '#8B5E34',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 4px rgba(139, 94, 52, 0.2)',
+        display: 'flex',
+      },
+      default: {
+        shadowColor: '#8B5E34',
+        shadowOffset: {
+          width: 0,
+          height: 2,
+        },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 3,
+      },
+    }),
   },
   switchContainer: {
     flexDirection: 'row',
@@ -387,16 +450,40 @@ const styles = StyleSheet.create({
     marginRight: 8,
     fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
   },
-  switchButton: {
-    color: '#8B5E34',
-    fontWeight: '600',
-    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
+  textButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
   errorText: {
     color: '#B45309',
     fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
+    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
+  },
+  input: {
+    flex: 1,
+    height: '100%',
+    fontSize: 17,
+    color: '#4A3728',
+    paddingLeft: 8,
+    paddingRight: 8,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
+    lineHeight: Platform.OS === 'web' ? 52 : 24,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  switchButtonText: {
+    color: '#8B5E34',
+    fontSize: 16,
+    fontWeight: '600',
     fontFamily: Platform.select({ web: 'Georgia, serif', default: 'serif' }),
   },
 }) 
